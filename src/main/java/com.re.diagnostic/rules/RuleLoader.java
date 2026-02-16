@@ -26,7 +26,7 @@ public class RuleLoader {
     public void loadAllRules() {
 
         String sql = """
-                SELECT m.id, m.dtc_code, m.severity, m.description,
+                SELECT m.id, m.dtc_code, m.severity, m.description, m.ecu_type,
                        r.rule_conditions, r.version
                 FROM dtc_master m
                 JOIN dtc_rule_conditions r
@@ -35,8 +35,8 @@ public class RuleLoader {
                 """;
 
         try (Connection con = postgresService.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
+                PreparedStatement ps = con.prepareStatement(sql);
+                ResultSet rs = ps.executeQuery()) {
             int loadedCount = 0;
             while (rs.next()) {
                 try {
@@ -58,7 +58,7 @@ public class RuleLoader {
     public void reloadRule(String dtcCode) {
 
         String sql = """
-                SELECT m.id, m.dtc_code, m.severity, m.description,
+                SELECT m.id, m.dtc_code, m.severity, m.description, m.ecu_type,
                        r.rule_conditions, r.version
                 FROM dtc_master m
                 JOIN dtc_rule_conditions r
@@ -68,7 +68,7 @@ public class RuleLoader {
                 """;
 
         try (Connection con = postgresService.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+                PreparedStatement ps = con.prepareStatement(sql)) {
 
             ps.setString(1, dtcCode);
 
@@ -106,11 +106,11 @@ public class RuleLoader {
                 rs.getString("dtc_code"),
                 rs.getString("severity"),
                 rs.getString("description"),
+                rs.getString("ecu_type"),
                 rs.getInt("version"),
                 propertyIds,
                 ruleJson,
-                ruleNode
-        );
+                ruleNode);
     }
 
     private void extractPropertyIds(JsonNode node, Set<Long> propertyIds) {

@@ -31,7 +31,8 @@ public class RuleEvaluator {
             for (String dtcCode : relevantDtcCodes) {
 
                 RuleDefinition rule = ruleCache.getByDtc(dtcCode);
-                if (rule == null) continue;
+                if (rule == null)
+                    continue;
 
                 boolean matched = false;
                 try {
@@ -45,8 +46,8 @@ public class RuleEvaluator {
                         rule.getDescription(),
                         matched,
                         rule.getSeverity(),
-                        rule.getVersion()
-                ));
+                        rule.getEcuType(),
+                        rule.getVersion()));
             }
 
             return results;
@@ -116,7 +117,8 @@ public class RuleEvaluator {
 
         for (JsonNode telemetry : telemetryArray) {
             JsonNode dataArray = telemetry.path("data");
-            if (!dataArray.isArray()) continue;
+            if (!dataArray.isArray())
+                continue;
 
             for (JsonNode dataNode : dataArray) {
                 long propertyId = dataNode.path("id").asLong();
@@ -130,16 +132,15 @@ public class RuleEvaluator {
         return values;
     }
 
-
     private boolean compareNumbers(double actual, double expected, String operator) {
         return switch (operator) {
-            case ">"  -> actual > expected;
-            case "<"  -> actual < expected;
+            case ">" -> actual > expected;
+            case "<" -> actual < expected;
             case ">=" -> actual >= expected;
             case "<=" -> actual <= expected;
             case "==" -> actual == expected;
             case "!=" -> actual != expected;
-            default   -> false;
+            default -> false;
         };
     }
 

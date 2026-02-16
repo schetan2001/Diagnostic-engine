@@ -10,6 +10,7 @@ public class MatchedProperty {
     private final String description;
     private final boolean matched;
     private final String severity;
+    private final String ecuType;
     private final Integer version;
 
 }

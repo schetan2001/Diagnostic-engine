@@ -27,7 +27,7 @@ public class DiagnosticEngineService {
     private static final String SYSTEM_ID = "system_id";
 
     public DiagnosticEngineService(RuleEvaluator ruleEvaluator, DtcRepository dtcRepository,
-                                   KafkaProducer<String, String> producer, String outputTopic) {
+            KafkaProducer<String, String> producer, String outputTopic) {
         this.ruleEvaluator = ruleEvaluator;
         this.dtcRepository = dtcRepository;
         this.producer = producer;
@@ -77,7 +77,7 @@ public class DiagnosticEngineService {
                             dtcCode, systemId, result.getSeverity(), result.getVersion());
 
                     dtcRepository.saveOccurrence(dtcId, dtcCode, systemId, result.getSeverity(), "OPEN",
-                            result.getVersion(), telemetryJson);
+                            result.getVersion(), result.getEcuType(), telemetryJson);
                     publishDtcEvent(result, systemId, "OPEN");
                 }
                 // RULE NOT MATCHED → CLOSE
@@ -107,6 +107,7 @@ public class DiagnosticEngineService {
         payload.put("description", result.getDescription());
         payload.put("systemId", systemId);
         payload.put("severity", result.getSeverity());
+        payload.put("ecuType", result.getEcuType());
         payload.put("status", status);
         payload.put("ruleVersion", result.getVersion());
 
@@ -122,9 +123,11 @@ public class DiagnosticEngineService {
 
             producer.send(new ProducerRecord<>(outputTopic, systemId, message), (metadata, exception) -> {
                 if (exception != null) {
-                    logger.error("Kafka publish failed | dtcCode={} | status={}", result.getDtcCode(), status, exception);
+                    logger.error("Kafka publish failed | dtcCode={} | status={}", result.getDtcCode(), status,
+                            exception);
                 } else {
-                    logger.info("DTC event published | dtcCode={} | status={} | offset={}", result.getDtcCode(), status, metadata.offset());
+                    logger.info("DTC event published | dtcCode={} | status={} | offset={}", result.getDtcCode(), status,
+                            metadata.offset());
                 }
             });
 

@@ -38,14 +38,14 @@ public class DtcRepository {
     }
 
     public void saveOccurrence(Long dtcId, String dtcCode, String systemId, String severity, String status,
-                               Integer ruleVersion, String canDataJson) {
+            Integer ruleVersion, String ecuType, String canDataJson) {
 
         String sql = """
                     INSERT INTO dtc_occurrences
                     (dtc_id, dtc_code, system_id, severity,
-                     status, rule_version, first_triggered_at,
+                     status, rule_version, ecu_type, first_triggered_at,
                      last_triggered_at, can_data, created_by)
-                    VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), ?::jsonb, 1)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?::jsonb, 1)
                 """;
 
         try (Connection con = postgresService.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
@@ -56,7 +56,8 @@ public class DtcRepository {
             ps.setString(4, severity);
             ps.setString(5, status);
             ps.setInt(6, ruleVersion);
-            ps.setString(7, canDataJson);
+            ps.setString(7, ecuType);
+            ps.setString(8, canDataJson);
 
             ps.executeUpdate();
         } catch (Exception e) {

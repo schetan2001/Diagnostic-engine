@@ -22,22 +22,27 @@ public class RuleDefinition {
     private final String dtcCode;
     private final String severity;
     private final String description;
+    private final String ecuType;
     private final Set<Long> propertyIds;
     private final String ruleConditionsJson;
     private final JsonNode ruleNode;
 
+    public RuleDefinition(Long dtcId, String dtcCode, String severity, String description, String ecuType,
+            Integer version, Set<Long> propertyIds,
+            String ruleConditionsJson, JsonNode ruleNode) {
 
-    public RuleDefinition(Long dtcId, String dtcCode, String severity,String description, Integer version, Set<Long> propertyIds,
-                          String ruleConditionsJson, JsonNode ruleNode) {
-
-        if (dtcId == null) throw new IllegalArgumentException("dtcId cannot be null");
-        if (dtcCode == null || dtcCode.isBlank()) throw new IllegalArgumentException("dtcCode cannot be null or blank");
-        if (version == null || version <= 0) throw new IllegalArgumentException("version must be > 0");
+        if (dtcId == null)
+            throw new IllegalArgumentException("dtcId cannot be null");
+        if (dtcCode == null || dtcCode.isBlank())
+            throw new IllegalArgumentException("dtcCode cannot be null or blank");
+        if (version == null || version <= 0)
+            throw new IllegalArgumentException("version must be > 0");
 
         this.dtcId = dtcId;
         this.dtcCode = dtcCode;
         this.severity = severity;
-        this.description=description;
+        this.description = description;
+        this.ecuType = ecuType;
         this.version = version;
         this.propertyIds = propertyIds == null ? Set.of() : Set.copyOf(propertyIds);
         this.ruleConditionsJson = ruleConditionsJson;
