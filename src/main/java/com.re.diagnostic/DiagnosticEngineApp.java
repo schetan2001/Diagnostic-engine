@@ -29,6 +29,7 @@ public class DiagnosticEngineApp {
         String KAFKA_BOOTSTRAP_BROKER = System.getenv().getOrDefault("KAFKA_BOOTSTRAP_BROKER", "localhost:9092");
         String INPUT_TOPIC = System.getenv().getOrDefault("INPUT_TOPIC", "get-telemetry-data");
         String OUTPUT_TOPIC = System.getenv().getOrDefault("OUTPUT_TOPIC", "telemetry-output-data");
+        String NOTIFICATION_OUTPUT_TOPIC = System.getenv().getOrDefault("NOTIFICATION_OUTPUT_TOPIC", "dtc-alert-topic");
         String SYNC_TOPIC = System.getenv().getOrDefault("SYNC_TOPIC", "sync-topic");
         String SYNC_CONSUMER_GROUP = System.getenv().getOrDefault("SYNC_CONSUMER_GROUP",
                 "sync-consumer-group") + "-" + System.currentTimeMillis();
@@ -44,6 +45,7 @@ public class DiagnosticEngineApp {
         logger.info("Kafka Broker         : {}", KAFKA_BOOTSTRAP_BROKER);
         logger.info("Input Topic          : {}", INPUT_TOPIC);
         logger.info("Output Topic         : {}", OUTPUT_TOPIC);
+        logger.info("Notification Topic   : {}", NOTIFICATION_OUTPUT_TOPIC);
         logger.info("Sync Topic           : {}", SYNC_TOPIC);
         logger.info("Postgres DB          : {}:{} / {}", POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB_NAME);
 
@@ -77,7 +79,7 @@ public class DiagnosticEngineApp {
         DtcRepository dtcRepository = new DtcRepository(postgresService);
 
         DiagnosticEngineService diagnosticEngine = new DiagnosticEngineService(ruleEvaluator, dtcRepository,
-                producer, OUTPUT_TOPIC);
+                producer, OUTPUT_TOPIC, NOTIFICATION_OUTPUT_TOPIC);
         logger.info("Diagnostic Engine initialized successfully");
 
         Properties consumerProps = new Properties();

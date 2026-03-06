@@ -3,6 +3,7 @@ package com.re.diagnostic;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.re.diagnostic.db.DtcRepository;
 import com.re.diagnostic.rules.MatchedProperty;
@@ -23,15 +24,17 @@ public class DiagnosticEngineService {
     private final DtcRepository dtcRepository;
     private final KafkaProducer<String, String> producer;
     private final String outputTopic;
+    private final String notificationOutputTopic;
 
     private static final String SYSTEM_ID = "system_id";
 
     public DiagnosticEngineService(RuleEvaluator ruleEvaluator, DtcRepository dtcRepository,
-            KafkaProducer<String, String> producer, String outputTopic) {
+            KafkaProducer<String, String> producer, String outputTopic, String notificationOutputTopic) {
         this.ruleEvaluator = ruleEvaluator;
         this.dtcRepository = dtcRepository;
         this.producer = producer;
         this.outputTopic = outputTopic;
+        this.notificationOutputTopic = notificationOutputTopic;
     }
 
     public void process(String telemetryJson) {
@@ -131,8 +134,144 @@ public class DiagnosticEngineService {
                 }
             });
 
+            publishAlertEvent(result, systemId, status);
+
         } catch (Exception e) {
             logger.error("Failed to publish DTC event | dtcCode={}", result.getDtcCode(), e);
+        }
+    }
+
+    private void publishAlertEvent(MatchedProperty result, String systemId, String status) {
+        long currentTimestamp = System.currentTimeMillis();
+
+        ObjectNode rootNode = mapper.createObjectNode();
+        
+        ObjectNode bodyNode = mapper.createObjectNode();
+        ObjectNode metaNode = mapper.createObjectNode();
+        metaNode.put("guid", "NA");
+        metaNode.put("system_id", systemId);
+        bodyNode.set("meta", metaNode);
+
+        ArrayNode dataNode = mapper.createArrayNode();
+
+        // message type
+        ObjectNode messageNode = mapper.createObjectNode();
+        messageNode.put("type", "message");
+        ArrayNode messageAttributes = mapper.createArrayNode();
+        
+        ObjectNode dtcCodeAttribute = mapper.createObjectNode();
+        dtcCodeAttribute.put("key", "dtcCode");
+        dtcCodeAttribute.put("datatype", "string");
+        dtcCodeAttribute.put("unit", "NA");
+        ArrayNode dtcCodeValue = mapper.createArrayNode();
+        dtcCodeValue.add(result.getDtcCode());
+        dtcCodeAttribute.set("value", dtcCodeValue);
+        messageAttributes.add(dtcCodeAttribute);
+
+        ObjectNode descriptionAttribute = mapper.createObjectNode();
+        descriptionAttribute.put("key", "description");
+        descriptionAttribute.put("datatype", "string");
+        descriptionAttribute.put("unit", "NA");
+        ArrayNode descriptionValue = mapper.createArrayNode();
+        descriptionValue.add(result.getDescription());
+        descriptionAttribute.set("value", descriptionValue);
+        messageAttributes.add(descriptionAttribute);
+
+        ObjectNode ecuTypeAttribute = mapper.createObjectNode();
+        ecuTypeAttribute.put("key", "ecuType");
+        ecuTypeAttribute.put("datatype", "string");
+        ecuTypeAttribute.put("unit", "NA");
+        ArrayNode ecuTypeValue = mapper.createArrayNode();
+        ecuTypeValue.add(result.getEcuType() != null ? result.getEcuType() : "NA");
+        ecuTypeAttribute.set("value", ecuTypeValue);
+        messageAttributes.add(ecuTypeAttribute);
+
+        messageNode.set("attributes", messageAttributes);
+        dataNode.add(messageNode);
+
+        // observability type
+        ObjectNode observabilityNode = mapper.createObjectNode();
+        observabilityNode.put("type", "observability");
+        ArrayNode observabilityAttributes = mapper.createArrayNode();
+        
+        ObjectNode eventTimeAttribute = mapper.createObjectNode();
+        eventTimeAttribute.put("key", "eventTime");
+        eventTimeAttribute.put("datatype", "long");
+        eventTimeAttribute.put("unit", "epochmilliseconds");
+        eventTimeAttribute.put("value", currentTimestamp);
+        observabilityAttributes.add(eventTimeAttribute);
+
+        if ("CLOSED".equals(status)) {
+            ObjectNode clearedAtAttribute = mapper.createObjectNode();
+            clearedAtAttribute.put("key", "clearedAt");
+            clearedAtAttribute.put("datatype", "long");
+            clearedAtAttribute.put("unit", "epochmilliseconds");
+            clearedAtAttribute.put("value", currentTimestamp);
+            observabilityAttributes.add(clearedAtAttribute);
+        }
+
+        observabilityNode.set("attributes", observabilityAttributes);
+        dataNode.add(observabilityNode);
+
+        // channel type
+        ObjectNode channelNode = mapper.createObjectNode();
+        channelNode.put("type", "channel");
+        ArrayNode channelAttributes = mapper.createArrayNode();
+        
+        ObjectNode modeAttribute = mapper.createObjectNode();
+        modeAttribute.put("key", "mode");
+        modeAttribute.put("datatype", "array");
+        modeAttribute.put("unit", "NA");
+        ArrayNode modeValue = mapper.createArrayNode();
+        modeValue.add("EMAIL");
+        modeValue.add("PUSH");
+        modeAttribute.set("value", modeValue);
+        channelAttributes.add(modeAttribute);
+        
+        channelNode.set("attributes", channelAttributes);
+        dataNode.add(channelNode);
+
+        // severity type
+        ObjectNode severityNode = mapper.createObjectNode();
+        severityNode.put("type", "severity");
+        ArrayNode severityAttributes = mapper.createArrayNode();
+        
+        ObjectNode severityAttribute = mapper.createObjectNode();
+        severityAttribute.put("key", "severity");
+        severityAttribute.put("datatype", "String"); // Based on example "String"
+        severityAttribute.put("unit", "NA");
+        severityAttribute.put("value", result.getSeverity());
+        severityAttributes.add(severityAttribute);
+
+        severityNode.set("attributes", severityAttributes);
+        dataNode.add(severityNode);
+
+        bodyNode.set("data", dataNode);
+        rootNode.set("body", bodyNode);
+
+        rootNode.put("timestamp", currentTimestamp);
+        rootNode.put("version", "");
+        rootNode.put("event_category", "NOTIFICATION");
+        rootNode.put("event_type", "DTC_ALERT");
+        rootNode.put("encoding_type", 0);
+        rootNode.put("correlation_id", "");
+        rootNode.put("event_id", "");
+
+        try {
+            String alertMessage = mapper.writeValueAsString(rootNode);
+
+            producer.send(new ProducerRecord<>(notificationOutputTopic, systemId, alertMessage), (metadata, exception) -> {
+                if (exception != null) {
+                    logger.error("Kafka publish to notification topic failed | dtcCode={} | status={}", result.getDtcCode(), status,
+                            exception);
+                } else {
+                    logger.info("Alert event published | dtcCode={} | status={} | offset={}", result.getDtcCode(), status,
+                            metadata.offset());
+                }
+            });
+
+        } catch (Exception e) {
+            logger.error("Failed to publish Alert event | dtcCode={}", result.getDtcCode(), e);
         }
     }
 
