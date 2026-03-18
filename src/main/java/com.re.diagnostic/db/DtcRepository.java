@@ -16,7 +16,7 @@ public class DtcRepository {
 
         String sql = """
                     SELECT 1
-                    FROM dtc_occurrences
+                    FROM ff_dtc_occurrences
                     WHERE dtc_id = ?
                       AND system_id = ?
                       AND status = 'OPEN'
@@ -41,7 +41,7 @@ public class DtcRepository {
             Integer ruleVersion, String ecuType, String canDataJson) {
 
         String sql = """
-                    INSERT INTO dtc_occurrences
+                    INSERT INTO ff_dtc_occurrences
                     (dtc_id, dtc_code, system_id, severity,
                      status, rule_version, ecu_type, first_triggered_at,
                      last_triggered_at, can_data, created_by)
@@ -68,7 +68,7 @@ public class DtcRepository {
     public void closeOpenOccurrence(Long dtcId, String systemId) {
 
         String sql = """
-                    UPDATE dtc_occurrences
+                    UPDATE ff_dtc_occurrences
                     SET status = 'CLOSED',
                         cleared_at = NOW()
                     WHERE dtc_id = ?
