@@ -28,8 +28,8 @@ public class RuleLoader {
         String sql = """
                 SELECT m.id, m.dtc_code, m.severity, m.description, m.ecu_type,
                        r.rule_conditions, r.version
-                FROM dtc_master m
-                JOIN dtc_rule_conditions r
+                FROM ff_dtc_master m
+                JOIN ff_dtc_rule_conditions r
                   ON m.id = r.dtc_id
                 WHERE r.is_latest = true
                 """;
@@ -60,8 +60,8 @@ public class RuleLoader {
         String sql = """
                 SELECT m.id, m.dtc_code, m.severity, m.description, m.ecu_type,
                        r.rule_conditions, r.version
-                FROM dtc_master m
-                JOIN dtc_rule_conditions r
+                FROM ff_dtc_master m
+                JOIN ff_dtc_rule_conditions r
                   ON m.id = r.dtc_id
                 WHERE r.is_latest = true
                   AND m.dtc_code = ?
