@@ -39,65 +39,68 @@ public class DiagnosticEngineService {
 
     public void process(String telemetryJson) {
 
-        JsonNode telemetryRoot;
+        long startTime = System.currentTimeMillis();
+        logger.info("Processing message start");
+
         try {
-            telemetryRoot = mapper.readTree(telemetryJson);
-        } catch (JsonProcessingException e) {
-            logger.error("Invalid telemetry JSON, skipping: {}", telemetryJson, e);
-            return;
-        }
-
-        String systemId = extractMetadataValues(telemetryRoot, SYSTEM_ID);
-        if (systemId == null) {
-            logger.warn("Missing systemId in telemetry, skipping: {}", telemetryJson);
-            return;
-        }
-
-        List<MatchedProperty> evaluationResults;
-        try {
-            evaluationResults = ruleEvaluator.evaluate(telemetryRoot);
-        } catch (Exception e) {
-            logger.error("Rule evaluation failed for systemId={}, skipping message", systemId, e);
-            return;
-        }
-
-        if (evaluationResults.isEmpty()) {
-            logger.debug("No rules matched for systemId={}", systemId);
-        } else {
-            logger.info("Matched {} rules for systemId={}", evaluationResults.size(), systemId);
-        }
-
-        for (MatchedProperty result : evaluationResults) {
-            Long dtcId = result.getDtcId();
-            String dtcCode = result.getDtcCode();
-            boolean matched = result.isMatched();
+            JsonNode telemetryRoot;
             try {
-                boolean openExists = dtcRepository.existsOpenDtc(dtcId, systemId);
-
-                // RULE MATCHED → OPEN
-                if (matched && !openExists) {
-                    logger.info("Opening DTC | dtcCode={} | systemId={} | severity={} | version={}",
-                            dtcCode, systemId, result.getSeverity(), result.getVersion());
-
-                    dtcRepository.saveOccurrence(dtcId, dtcCode, systemId, result.getSeverity(), "OPEN",
-                            result.getVersion(), result.getEcuType(), telemetryJson);
-                    publishDtcEvent(result, systemId, "OPEN");
-                }
-                // RULE NOT MATCHED → CLOSE
-                else if (!matched && openExists) {
-                    logger.info("Closing DTC | dtcCode={} | systemId={}", dtcCode, systemId);
-
-                    dtcRepository.closeOpenOccurrence(dtcId, systemId);
-                    publishDtcEvent(result, systemId, "CLOSED");
-                }
-                // No state change
-                else {
-                    logger.debug("No DTC state change | dtcCode={} | systemId={} | matched={} | openExists={}",
-                            dtcCode, systemId, matched, openExists);
-                }
-            } catch (Exception e) {
-                logger.error("Failed processing DTC lifecycle | dtcCode={} | systemId={}", dtcCode, systemId, e);
+                telemetryRoot = mapper.readTree(telemetryJson);
+            } catch (JsonProcessingException e) {
+                logger.error("Invalid telemetry JSON, skipping: {}", telemetryJson, e);
+                return;
             }
+
+            String systemId = extractMetadataValues(telemetryRoot, SYSTEM_ID);
+            if (systemId == null) {
+                logger.warn("Missing systemId in telemetry, skipping: {}", telemetryJson);
+                return;
+            }
+
+            List<MatchedProperty> evaluationResults;
+            try {
+                evaluationResults = ruleEvaluator.evaluate(telemetryRoot);
+            } catch (Exception e) {
+                logger.error("Rule evaluation failed for systemId={}, skipping message", systemId, e);
+                return;
+            }
+
+            if (evaluationResults.isEmpty()) {
+                logger.debug("No rules matched for systemId={}", systemId);
+            } else {
+                logger.info("Matched {} rules for systemId={}", evaluationResults.size(), systemId);
+            }
+
+            for (MatchedProperty result : evaluationResults) {
+                Long dtcId = result.getDtcId();
+                String dtcCode = result.getDtcCode();
+                boolean matched = result.isMatched();
+                try {
+                    boolean openExists = dtcRepository.existsOpenDtc(dtcId, systemId);
+
+                    // RULE MATCHED → OPEN
+                    if (matched && !openExists) {
+                        logger.info("Opening DTC | dtcCode={} | systemId={} | severity={} | version={}",
+                                dtcCode, systemId, result.getSeverity(), result.getVersion());
+
+                        dtcRepository.saveOccurrence(dtcId, dtcCode, systemId, result.getSeverity(), "OPEN",
+                                result.getVersion(), result.getEcuType(), telemetryJson);
+                        publishDtcEvent(result, systemId, "OPEN");
+                    }
+                    // RULE NOT MATCHED → CLOSE
+                    else if (!matched && openExists) {
+                        logger.info("Closing DTC | dtcCode={} | systemId={}", dtcCode, systemId);
+
+                        dtcRepository.closeOpenOccurrence(dtcId, systemId);
+                        publishDtcEvent(result, systemId, "CLOSED");
+                    }
+                } catch (Exception e) {
+                    logger.error("Failed processing DTC lifecycle | dtcCode={} | systemId={}", dtcCode, systemId, e);
+                }
+            }
+        } finally {
+            long endTime = System.currentTimeMillis();
+            logger.info("Processing message end. Time taken: {} ms", (endTime - startTime));
         }
 
     }
@@ -145,7 +148,7 @@ public class DiagnosticEngineService {
         long currentTimestamp = System.currentTimeMillis();
 
         ObjectNode rootNode = mapper.createObjectNode();
-        
+
         ObjectNode bodyNode = mapper.createObjectNode();
         ObjectNode metaNode = mapper.createObjectNode();
         metaNode.put("guid", "NA");
@@ -158,7 +161,7 @@ public class DiagnosticEngineService {
         ObjectNode messageNode = mapper.createObjectNode();
         messageNode.put("type", "message");
         ArrayNode messageAttributes = mapper.createArrayNode();
-        
+
         ObjectNode dtcCodeAttribute = mapper.createObjectNode();
         dtcCodeAttribute.put("key", "dtcCode");
         dtcCodeAttribute.put("datatype", "string");
@@ -193,7 +196,7 @@ public class DiagnosticEngineService {
         ObjectNode observabilityNode = mapper.createObjectNode();
         observabilityNode.put("type", "observability");
         ArrayNode observabilityAttributes = mapper.createArrayNode();
-        
+
         ObjectNode eventTimeAttribute = mapper.createObjectNode();
         eventTimeAttribute.put("key", "eventTime");
         eventTimeAttribute.put("datatype", "long");
@@ -217,7 +220,7 @@ public class DiagnosticEngineService {
         ObjectNode channelNode = mapper.createObjectNode();
         channelNode.put("type", "channel");
         ArrayNode channelAttributes = mapper.createArrayNode();
-        
+
         ObjectNode modeAttribute = mapper.createObjectNode();
         modeAttribute.put("key", "mode");
         modeAttribute.put("datatype", "array");
@@ -227,7 +230,7 @@ public class DiagnosticEngineService {
         modeValue.add("PUSH");
         modeAttribute.set("value", modeValue);
         channelAttributes.add(modeAttribute);
-        
+
         channelNode.set("attributes", channelAttributes);
         dataNode.add(channelNode);
 
@@ -235,7 +238,7 @@ public class DiagnosticEngineService {
         ObjectNode severityNode = mapper.createObjectNode();
         severityNode.put("type", "severity");
         ArrayNode severityAttributes = mapper.createArrayNode();
-        
+
         ObjectNode severityAttribute = mapper.createObjectNode();
         severityAttribute.put("key", "severity");
         severityAttribute.put("datatype", "String"); // Based on example "String"
@@ -260,15 +263,18 @@ public class DiagnosticEngineService {
         try {
             String alertMessage = mapper.writeValueAsString(rootNode);
 
-            producer.send(new ProducerRecord<>(notificationOutputTopic, systemId, alertMessage), (metadata, exception) -> {
-                if (exception != null) {
-                    logger.error("Kafka publish to notification topic failed | dtcCode={} | status={}", result.getDtcCode(), status,
-                            exception);
-                } else {
-                    logger.info("Alert event published | dtcCode={} | status={} | offset={}", result.getDtcCode(), status,
-                            metadata.offset());
-                }
-            });
+            producer.send(new ProducerRecord<>(notificationOutputTopic, systemId, alertMessage),
+                    (metadata, exception) -> {
+                        if (exception != null) {
+                            logger.error("Kafka publish to notification topic failed | dtcCode={} | status={}",
+                                    result.getDtcCode(), status,
+                                    exception);
+                        } else {
+                            logger.info("Alert event published | dtcCode={} | status={} | offset={}",
+                                    result.getDtcCode(), status,
+                                    metadata.offset());
+                        }
+                    });
 
         } catch (Exception e) {
             logger.error("Failed to publish Alert event | dtcCode={}", result.getDtcCode(), e);
