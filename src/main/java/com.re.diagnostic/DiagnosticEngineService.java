@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.re.diagnostic.db.DtcRepository;
+import com.re.diagnostic.db.DtcStateCache;
 import com.re.diagnostic.rules.MatchedProperty;
 import com.re.diagnostic.rules.RuleEvaluator;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -22,6 +23,7 @@ public class DiagnosticEngineService {
 
     private final RuleEvaluator ruleEvaluator;
     private final DtcRepository dtcRepository;
+    private final DtcStateCache dtcStateCache;
     private final KafkaProducer<String, String> producer;
     private final String outputTopic;
     private final String notificationOutputTopic;
@@ -29,17 +31,18 @@ public class DiagnosticEngineService {
     private static final String SYSTEM_ID = "system_id";
 
     public DiagnosticEngineService(RuleEvaluator ruleEvaluator, DtcRepository dtcRepository,
+            DtcStateCache dtcStateCache,
             KafkaProducer<String, String> producer, String outputTopic, String notificationOutputTopic) {
         this.ruleEvaluator = ruleEvaluator;
         this.dtcRepository = dtcRepository;
+        this.dtcStateCache = dtcStateCache;
         this.producer = producer;
         this.outputTopic = outputTopic;
         this.notificationOutputTopic = notificationOutputTopic;
     }
 
     public void process(String telemetryJson) {
-
-        long startTime = System.currentTimeMillis();
+        long startNs = System.nanoTime();
         logger.info("Processing message start");
 
         try {
@@ -76,7 +79,7 @@ public class DiagnosticEngineService {
                 String dtcCode = result.getDtcCode();
                 boolean matched = result.isMatched();
                 try {
-                    boolean openExists = dtcRepository.existsOpenDtc(dtcId, systemId);
+                    boolean openExists = dtcStateCache.isOpen(systemId, dtcId);
 
                     // RULE MATCHED → OPEN
                     if (matched && !openExists) {
@@ -85,6 +88,7 @@ public class DiagnosticEngineService {
 
                         dtcRepository.saveOccurrence(dtcId, dtcCode, systemId, result.getSeverity(), "OPEN",
                                 result.getVersion(), result.getEcuType(), telemetryJson);
+                        dtcStateCache.markOpen(systemId, dtcId);
                         publishDtcEvent(result, systemId, "OPEN");
                     }
                     // RULE NOT MATCHED → CLOSE
@@ -92,17 +96,22 @@ public class DiagnosticEngineService {
                         logger.info("Closing DTC | dtcCode={} | systemId={}", dtcCode, systemId);
 
                         dtcRepository.closeOpenOccurrence(dtcId, systemId);
+                        dtcStateCache.markClosed(systemId, dtcId);
                         publishDtcEvent(result, systemId, "CLOSED");
+                    }
+                    // No state change
+                    else {
+                        logger.debug("No DTC state change | dtcCode={} | systemId={} | matched={} | openExists={}",
+                                dtcCode, systemId, matched, openExists);
                     }
                 } catch (Exception e) {
                     logger.error("Failed processing DTC lifecycle | dtcCode={} | systemId={}", dtcCode, systemId, e);
                 }
             }
         } finally {
-            long endTime = System.currentTimeMillis();
-            logger.info("Processing message end. Time taken: {} ms", (endTime - startTime));
+            long elapsedMs = (System.nanoTime() - startNs) / 1_000_000;
+            logger.info("Processing message end. Time taken: {} ms", elapsedMs);
         }
-
     }
 
     private void publishDtcEvent(MatchedProperty result, String systemId, String status) {
@@ -113,9 +122,9 @@ public class DiagnosticEngineService {
         payload.put("description", result.getDescription());
         payload.put("systemId", systemId);
         payload.put("severity", result.getSeverity());
-        payload.put("ecuType", result.getEcuType());
         payload.put("status", status);
         payload.put("ruleVersion", result.getVersion());
+		payload.put("ecuType", result.getEcuType());
 
         String now = Instant.now().toString();
         payload.put("eventTime", now);
@@ -185,7 +194,6 @@ public class DiagnosticEngineService {
         ecuTypeAttribute.put("datatype", "string");
         ecuTypeAttribute.put("unit", "NA");
         ArrayNode ecuTypeValue = mapper.createArrayNode();
-        ecuTypeValue.add(result.getEcuType() != null ? result.getEcuType() : "NA");
         ecuTypeAttribute.set("value", ecuTypeValue);
         messageAttributes.add(ecuTypeAttribute);
 
