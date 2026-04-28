@@ -108,6 +108,8 @@ public class DiagnosticEngineApp {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        consumerProps.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "50");
+        consumerProps.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "900000");
 
         KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps);
 
@@ -122,11 +124,11 @@ public class DiagnosticEngineApp {
 
         logger.info("Diagnostic Engine is now running...");
         ExecutorService threadPool = Executors.newFixedThreadPool(20);
-        
+
         try {
             while (running) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
-                
+
                 if (records.isEmpty()) {
                     continue;
                 }
@@ -145,12 +147,16 @@ public class DiagnosticEngineApp {
                     }, threadPool);
                     tasks.add(task);
                 }
-                
+
                 // Wait for all tasks in the batch to finish
                 CompletableFuture.allOf(tasks.toArray(new CompletableFuture[0])).join();
-                
+
                 // Safely commit offsets only after entire batch is successfully processed
-                consumer.commitSync();
+                try {
+                    consumer.commitSync();
+                } catch (CommitFailedException e) {
+                    logger.warn("Commit failed due to rebalance; will reprocess.", e);
+                }
             }
         } catch (WakeupException e) {
             logger.info("Consumer wakeup triggered for shutdown");
