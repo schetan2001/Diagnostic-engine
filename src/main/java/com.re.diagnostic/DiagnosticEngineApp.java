@@ -44,8 +44,8 @@ public class DiagnosticEngineApp {
         String POSTGRES_DB_NAME = System.getenv().getOrDefault("POSTGRES_DB_NAME", "RE");
         String POSTGRES_DB_USERNAME = System.getenv().getOrDefault("POSTGRES_DB_USERNAME", "postgres");
         String POSTGRES_DB_PASSWORD = System.getenv().getOrDefault("POSTGRES_DB_PASSWORD", "tracking2018");
-        String batch_size = System.getenv("BATCH_SIZE") != null ? System.getenv("BATCH_SIZE") : "500";
-        String linger_ms = System.getenv("LINGER_MS") != null ? System.getenv("LINGER_MS") : "20000";
+        String batch_size = System.getenv("BATCH_SIZE") != null ? System.getenv("BATCH_SIZE") : "65536";
+        String linger_ms = System.getenv("LINGER_MS") != null ? System.getenv("LINGER_MS") : "100";
         String logLevel = System.getenv("LOG4J_LEVEL") != null ? System.getenv("LOG4J_LEVEL") : "INFO";
         Configurator.setRootLevel(Level.toLevel(logLevel));
 
@@ -108,8 +108,9 @@ public class DiagnosticEngineApp {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        consumerProps.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "50");
+        consumerProps.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "500");
         consumerProps.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "900000");
+        consumerProps.put(ConsumerConfig.FETCH_MIN_BYTES_CONFIG, "1024");
 
         KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps);
 
@@ -127,7 +128,7 @@ public class DiagnosticEngineApp {
 
         try {
             while (running) {
-                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
 
                 if (records.isEmpty()) {
                     continue;

@@ -43,7 +43,7 @@ public class DiagnosticEngineService {
 
     public void process(String telemetryJson) {
         long startNs = System.nanoTime();
-        logger.info("Processing message start");
+        logger.debug("Processing message start");
 
         try {
             JsonNode telemetryRoot;
@@ -110,7 +110,7 @@ public class DiagnosticEngineService {
             }
         } finally {
             long elapsedMs = (System.nanoTime() - startNs) / 1_000_000;
-            logger.info("Processing message end. Time taken: {} ms", elapsedMs);
+            logger.debug("Processing message end. Time taken: {} ms", elapsedMs);
         }
     }
 
