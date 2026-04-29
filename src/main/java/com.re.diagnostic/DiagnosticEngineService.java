@@ -14,7 +14,9 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class DiagnosticEngineService {
 
@@ -72,6 +74,15 @@ public class DiagnosticEngineService {
                 logger.debug("No rules matched for systemId={}", systemId);
             } else {
                 logger.info("Matched {} rules for systemId={}", evaluationResults.size(), systemId);
+            }
+
+            // Pre-warm cache: 1 batch SQL query instead of N individual cache-miss queries
+            if (!evaluationResults.isEmpty()) {
+                Set<Long> dtcIdsToCheck = new HashSet<>();
+                for (MatchedProperty result : evaluationResults) {
+                    dtcIdsToCheck.add(result.getDtcId());
+                }
+                dtcStateCache.preWarm(systemId, dtcIdsToCheck);
             }
 
             for (MatchedProperty result : evaluationResults) {

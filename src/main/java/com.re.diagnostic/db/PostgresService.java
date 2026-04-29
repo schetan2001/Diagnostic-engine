@@ -14,9 +14,9 @@ public class PostgresService {
         config.setJdbcUrl(String.format("jdbc:postgresql://%s:%s/%s?ssl=false&ApplicationName=diagnostic-engine", host, port, dbName));
         config.setUsername(username);
         config.setPassword(password);
-        config.setMaximumPoolSize(10);
-        config.setMinimumIdle(2);
-        config.setConnectionTimeout(3000);
+        config.setMaximumPoolSize(20);
+        config.setMinimumIdle(5);
+        config.setConnectionTimeout(30000);
         config.setIdleTimeout(600000);
         config.setMaxLifetime(1800000);
 

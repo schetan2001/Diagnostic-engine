@@ -6,6 +6,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.time.Duration;
+import java.util.Set;
 
 /**
  * In-memory cache for tracking open DTC states.
@@ -51,6 +52,38 @@ public class DtcStateCache {
     public long size() {
         cache.cleanUp();
         return cache.estimatedSize();
+    }
+
+    /**
+     * Pre-warm the cache for a systemId by batch-querying all open DTCs in one DB call.
+     * This avoids N individual cache-miss DB round-trips during processing.
+     */
+    public void preWarm(String systemId, Set<Long> dtcIdsToCheck) {
+        boolean anyMissing = false;
+        for (Long dtcId : dtcIdsToCheck) {
+            if (cache.getIfPresent(buildKey(systemId, dtcId)) == null) {
+                anyMissing = true;
+                break;
+            }
+        }
+
+        if (!anyMissing) {
+            return;
+        }
+
+        try {
+            Set<Long> openDtcIds = dtcRepository.findOpenDtcIds(systemId);
+
+            for (Long dtcId : dtcIdsToCheck) {
+                String key = buildKey(systemId, dtcId);
+                if (cache.getIfPresent(key) == null) {
+                    cache.put(key, openDtcIds.contains(dtcId));
+                }
+            }
+            logger.debug("Pre-warmed cache for systemId={}, checked={}, open={}", systemId, dtcIdsToCheck.size(), openDtcIds.size());
+        } catch (Exception e) {
+            logger.warn("Cache pre-warm failed for systemId={}, falling back to individual lookups", systemId, e);
+        }
     }
 
     private static String buildKey(String systemId, Long dtcId) {

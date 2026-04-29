@@ -3,6 +3,8 @@ package com.re.diagnostic.db;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.HashSet;
+import java.util.Set;
 
 public class DtcRepository {
 
@@ -86,6 +88,38 @@ public class DtcRepository {
         } catch (Exception e) {
             throw new RuntimeException("Failed to close DTC occurrence", e);
         }
+    }
+
+    /**
+     * Batch-query all open DTC states for a given systemId.
+     * Returns the set of dtcIds that have an OPEN occurrence.
+     * Used to pre-warm the cache with a single DB round-trip instead of N individual queries.
+     */
+    public Set<Long> findOpenDtcIds(String systemId) {
+
+        String sql = """
+                    SELECT dtc_id
+                    FROM dtc_occurrences
+                    WHERE system_id = ?
+                      AND status = 'OPEN'
+                """;
+
+        Set<Long> openDtcIds = new HashSet<>();
+
+        try (Connection con = postgresService.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, systemId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    openDtcIds.add(rs.getLong("dtc_id"));
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to batch-query open DTCs for systemId=" + systemId, e);
+        }
+
+        return openDtcIds;
     }
 
 }

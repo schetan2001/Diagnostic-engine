@@ -152,12 +152,12 @@ public class DiagnosticEngineApp {
                 // Wait for all tasks in the batch to finish
                 CompletableFuture.allOf(tasks.toArray(new CompletableFuture[0])).join();
 
-                // Safely commit offsets only after entire batch is successfully processed
-                try {
-                    consumer.commitSync();
-                } catch (CommitFailedException e) {
-                    logger.warn("Commit failed due to rebalance; will reprocess.", e);
-                }
+                // Commit offsets asynchronously to unblock the poll loop
+                consumer.commitAsync((offsets, exception) -> {
+                    if (exception != null) {
+                        logger.warn("Async commit failed; will be retried on next commit.", exception);
+                    }
+                });
             }
         } catch (WakeupException e) {
             logger.info("Consumer wakeup triggered for shutdown");
