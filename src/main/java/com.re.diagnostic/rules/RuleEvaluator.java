@@ -66,6 +66,17 @@ public class RuleEvaluator {
             JsonNode conditions = node.get("conditions");
 
             if ("AND".equals(logic)) {
+                if (node.has("minMatches")) {
+                    int minMatches = node.get("minMatches").asInt();
+                    int matched = 0;
+                    for (JsonNode condition : conditions) {
+                        if (evaluateRuleNode(condition, telemetry)) {
+                            matched++;
+                            if (matched >= minMatches) return true;
+                        }
+                    }
+                    return false;
+                }
                 for (JsonNode condition : conditions) {
                     if (!evaluateRuleNode(condition, telemetry)) {
                         return false;
